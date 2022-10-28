@@ -28,7 +28,7 @@ var leftDown, upDown, rightDown, downDown;
 var isFire, isSpeed;
 var settings = {
 	enemySpawnRate: 30,
-	enemySpawnRateCpt: 0
+	enemySpawnRateCpt: 0,
 }
 var thePlayer = {
 	x : 200,
@@ -72,7 +72,7 @@ var enemyStats = {
 	speeds: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,4]
 
 }
-
+var cheatMode = false;
 function makeEnemy() {
 	let enemyType = Math.random() > 0.5 ? 'physical' : 'mystical';
 	return enemyData = {
@@ -210,7 +210,12 @@ function moveMissile(data) {
 ███████╗ ╚████╔╝ ███████╗██║ ╚████║   ██║   ███████║
 ╚══════╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝
 */
-
+function switchPlayerArmor() {
+	thePlayer.currentArmorType = thePlayer.currentArmorType == 'physical' ? 'mystical' : 'physical';
+}
+function switchPlayerMissileType() {
+	thePlayer.currentMissileType = thePlayer.currentMissileType == 'physical' ? 'mystical' : 'physical';
+}
 function onKeyDown(evt) {
 	if(directionsBykeyCodes.hasOwnProperty(evt.keyCode)) {
 		managePlayerMovement(directionsBykeyCodes[evt.keyCode], true);
@@ -220,16 +225,17 @@ function onKeyDown(evt) {
 	}
 
 	if(evt.keyCode == 75) { // k
-		thePlayer.currentMissileType = thePlayer.currentMissileType == 'physical' ? 'mystical' : 'physical';
-		thePlayer.currentArmorType = thePlayer.currentArmorType == 'physical' ? 'mystical' : 'physical';
+		switchPlayerArmor();
+		switchPlayerMissileType();
 	}
 
 	if(evt.keyCode == 76) { // l
-		
+		cheatMode = !cheatMode;
+		thePlayer.fireCooldown = cheatMode ? 2 : (FRAMERATE / 10);
 	}
 
 	if(evt.keyCode == 77) { // m
-		thePlayer.currentArmorType = thePlayer.currentArmorType == 'physical' ? 'mystical' : 'physical';
+		switchPlayerArmor();
 	}
 
 	
@@ -394,6 +400,17 @@ function adjustPlayerActions() {
 			type: missileType,
 			isFromPlayer: true
 		}
+		if(cheatMode) {
+			switchPlayerArmor();
+			switchPlayerMissileType();
+
+			// add another missile of the opposite type
+			let anotherMissile = JSON.parse(JSON.stringify(oneMissile));
+			oneMissile.coords.x -= 8;
+			anotherMissile.coords.x += 8;
+			anotherMissile.type = thePlayer.currentMissileType == 'physical' ? missileTypes['mystical'] : missileTypes['physical'];
+			missiles.push(anotherMissile);
+		}
 		missiles.push(oneMissile);
 		thePlayer.fireCooldownCpt = thePlayer.fireCooldown;
 	}
@@ -467,7 +484,9 @@ function drawPlayer() {
 	drawRectangle(thePlayer.x, thePlayer.y, thePlayer.w, thePlayer.h, armorType.color);
 }
 function drawAll() {
+	ctx.globalAlpha = 1;
 	drawPlayer();
+	ctx.globalAlpha = 1;
 	drawEnemies();
 	drawMissiles();
 	detectMissilesCollisions();
