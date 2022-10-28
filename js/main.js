@@ -11,6 +11,10 @@ BACKLOG:
 - infinite background effect
 - enemies trajectories
 	- bouncing off sides
+- rename methods with prefixes (get rid of 'adjust' prefix):
+	- manage...	when sequencing inputs
+	- move... 	when changing object's coordinates
+	- draw...	when adding to canvas
 
 
 TODO:
@@ -22,10 +26,11 @@ TODO:
 * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 const FRAMERATE = 60;
+var mainTimerInSeconds=  0, frameCount = 0;
 var canvas, ctx, CANVAS_HEIGHT, CANVAS_WIDTH, canvasMinX, canvasMaxX, canvasMinY, canvasMaxY, intervalId, player, backgroundColor;
 var bordersPadding = 6;
-var leftDown, upDown, rightDown, downDown;
-var isFire, isSpeed;
+var leftDown, upDown, rightDown, downDown; // TODO one variable in player.directions
+var isFiring, isDashing;
 var settings = {
 	enemySpawnRate: 30,
 	enemySpawnRateCpt: 0,
@@ -64,18 +69,86 @@ var acionsBykeyCodes = {
 	32: 'speed', // SPACEBAR
 }
 
+var thresholdSettings = {
+	coords : {
+		x: 0,
+		y: 300
+	},
+	h: 4,
+	w: CANVAS_WIDTH,
+	color: 'red'
+}
+
 var enemies = [];
 var enemyStats = {
 	r: 25,
 	mysticalColor: 'rgba(128,0,128,0.3)',
 	physicalColor: 'rgba(128,128,128,0.5)',
-	speeds: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,4]
+	speeds: [
+		0.5,
+		0.90,
+		1.00,
+		1.10,
+		1.00,
+		0.90,
+		1.00,
+		1.10,
+		1.00,
+		0.90,
+		1.00,
+		1.10,
+		1.00,
+		0.90,
+		2
+	]
+};
 
+
+// will position the Threshold
+var mostAdvancedEnemyY = 0;
+
+var missiles = [
+	// will contains all missiles objects
+];
+
+// TODO trop compliqué
+var missileTypes = {
+	physical: {
+		name: 'physical',
+		color: 'white',
+		w: 4,
+		h: 8
+	},
+	mystical: {
+		name: 'mystical',
+		color: 'deeppink',
+		w: 4,
+		h: 8
+	},
 }
+
+// TODO trop compliqué
+var armorTypes = {
+	physical: {
+		name: 'physical',
+		color: 'grey',
+		w: 4,
+		h: 8
+	},
+	mystical: {
+		name: 'mystical',
+		color: 'purple',
+		w: 4,
+		h: 8
+	},
+}
+
 var cheatMode = false;
+var beastMode = false;
+
 function makeEnemy() {
 	let enemyType = Math.random() > 0.5 ? 'physical' : 'mystical';
-	return enemyData = {
+	let enemyData = {
 		x: getRandomInt(enemyStats.r, (canvasMaxX) - enemyStats.r),
 		y: 30,
 		r: enemyStats.r,
@@ -84,16 +157,13 @@ function makeEnemy() {
 			name: enemyType
 		},
 		color: enemyType == 'physical' ? enemyStats.physicalColor : enemyStats.mysticalColor
-	}
+	};
+	if(beastMode) upEnemiesSpawnrate();
+	if(!beastMode) downEnemiesSpawnrate();
+	return enemyData;
 }
-function drawEnemy(data) {
-	drawCircle(data.x, data.y, data.r, data.color);
-}
-function drawEnemies() {
-	for (let i = 0; i < enemies.length; i++) {
-		const data = enemies[i];
-		drawEnemy(data);
-	}
+function upNewEnemiesSpeed() {
+	enemyData.speed = enemyData.speed * 2;
 }
 
 
@@ -109,6 +179,7 @@ function drawEnemies() {
 function init() {
 	canvas = document.getElementById('canvas');
 	ctx = canvas.getContext('2d');
+	ctx.globalAlpha = 1;
 	CANVAS_HEIGHT = canvas.height;
 	CANVAS_WIDTH = canvas.width;
 	backgroundColor = '#303030';
@@ -118,6 +189,9 @@ function init() {
 	canvasMaxX = canvasMinX + CANVAS_WIDTH;
 	canvasMinY = 0;
 	canvasMaxY = canvasMinY + CANVAS_HEIGHT;
+
+	// adjust variables that need it
+	thresholdSettings.w = CANVAS_WIDTH;
 
 	// main loop
 	mainLoop();
@@ -165,6 +239,60 @@ function drawRectangle(x,y,w,h,color) {
 	ctx.fill();
 	ctx.fillStyle = null;
 }
+function drawThreshold() {
+	ctx.globalAlpha = 0.1;
+	drawRectangle(
+		thresholdSettings.coords.x, 
+		thresholdSettings.coords.y, 
+		thresholdSettings.w, 
+		thresholdSettings.h, 
+		thresholdSettings.color
+	);
+	ctx.globalAlpha = 1;
+}
+
+
+function drawMissile(data) {
+	// data.isFromPlayer
+	drawRectangle(data.coords.x, data.coords.y, data.type.w, data.type.h, data.type.color);
+}
+function drawMissiles() {
+	for (let i = 0; i < missiles.length; i++) {
+		let oneMissile = missiles[i];
+		drawMissile(oneMissile);
+	}
+}
+
+function drawPlayer() {
+	let armorType = armorTypes[thePlayer.currentArmorType];
+	drawRectangle(thePlayer.x, thePlayer.y, thePlayer.w, thePlayer.h, armorType.color);
+}
+
+
+
+function drawEnemy(data) {
+	drawCircle(data.x, data.y, data.r, data.color);
+}
+function drawEnemies() {
+	for (let i = 0; i < enemies.length; i++) {
+		const data = enemies[i];
+		drawEnemy(data);
+	}
+}
+
+
+function drawAll() {
+	ctx.globalAlpha = 1;
+	drawPlayer();
+	ctx.globalAlpha = 1;
+	drawEnemies();
+	drawThreshold();
+	drawMissiles();
+	detectMissilesCollisions();
+	
+}
+
+
 function pleaseClear() {
 	drawRectangle(0,0,CANVAS_WIDTH,CANVAS_HEIGHT, backgroundColor);
 }
@@ -231,14 +359,13 @@ function onKeyDown(evt) {
 
 	if(evt.keyCode == 76) { // l
 		cheatMode = !cheatMode;
-		thePlayer.fireCooldown = cheatMode ? 2 : (FRAMERATE / 10);
+		if(cheatMode) upPlayerFirerate();
+		if(!cheatMode) downPlayerFirerate();
 	}
 
 	if(evt.keyCode == 77) { // m
-		switchPlayerArmor();
+		beastMode = !beastMode;
 	}
-
-	
 }
 
 function onKeyUp(evt) {
@@ -250,8 +377,37 @@ function onKeyUp(evt) {
 	}
 }
 
+// TODO refaire en propre avec un joli écouteur d'event, pas en vrac sur le bouton
+document.getElementById('doStart').addEventListener('click', function() {
+	document.getElementById('beginning').remove();
+	setTimeout(function() {
+		pleaseStart();
+	}, 500);
+});
+
+
 function onMouseMove(evt) {
 }
+
+
+
+
+
+
+function upEnemiesSpawnrate() {
+	settings.enemySpawnRate = 10;
+}
+function downEnemiesSpawnrate() {
+	settings.enemySpawnRate = 30;
+}
+
+function upPlayerFirerate() {
+	thePlayer.fireCooldown = 2;
+}
+function downPlayerFirerate() {
+	thePlayer.fireCooldown = (FRAMERATE / 10);
+}
+
 
 
 
@@ -275,10 +431,22 @@ function managePlayerMovement(direction, isPress) {
 
 function managePlayerAction(actionName, isPress) {
 	switch(actionName) {
-		case 'fire': isFire = isPress; break;
-		case 'speed': isSpeed = isPress; break;
+		case 'fire': isFiring = isPress; break;
+		case 'speed': isDashing = isPress; break;
 	}
 }
+
+
+
+function manageEnemies() {
+	if(settings.enemySpawnRateCpt < settings.enemySpawnRate) {
+		settings.enemySpawnRateCpt++;
+	} else {
+		enemies.push(makeEnemy());
+		settings.enemySpawnRateCpt = 0;
+	}
+}
+
 
 function detectMissilesCollisions() {
 	for (let i = 0; i < missiles.length; i++) {
@@ -300,64 +468,30 @@ function detectMissilesCollisions() {
 
 
 
+
+
+
 /*
- ██████╗ ██████╗ ██████╗ ███████╗    ███╗   ███╗███████╗████████╗██╗  ██╗ ██████╗ ██████╗ ███████╗
-██╔════╝██╔═══██╗██╔══██╗██╔════╝    ████╗ ████║██╔════╝╚══██╔══╝██║  ██║██╔═══██╗██╔══██╗██╔════╝
-██║     ██║   ██║██████╔╝█████╗      ██╔████╔██║█████╗     ██║   ███████║██║   ██║██║  ██║███████╗
-██║     ██║   ██║██╔══██╗██╔══╝      ██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██║   ██║██║  ██║╚════██║
-╚██████╗╚██████╔╝██║  ██║███████╗    ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║╚██████╔╝██████╔╝███████║
- ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝    ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝
+ █████╗ ██████╗      ██╗██╗   ██╗███████╗████████╗███████╗
+██╔══██╗██╔══██╗     ██║██║   ██║██╔════╝╚══██╔══╝██╔════╝
+███████║██║  ██║     ██║██║   ██║███████╗   ██║   ███████╗
+██╔══██║██║  ██║██   ██║██║   ██║╚════██║   ██║   ╚════██║
+██║  ██║██████╔╝╚█████╔╝╚██████╔╝███████║   ██║   ███████║
+╚═╝  ╚═╝╚═════╝  ╚════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚══════╝
 */
 
-function mainLoop() {
-	//setTimeout(function() {
-		requestAnimationFrame(mainLoop);
-		
-		// prepare variables from inputs
-		adjustFromInputs();
-
-		// prepare anything that will move
-		adjustAnimations();
-
-		// cover everything
-		pleaseClear();
-
-		// draw everything
-		drawAll();
-
-	//}, 1000 / FRAMERATE);
-}
-
-function manageEnemies() {
-	if(settings.enemySpawnRateCpt < settings.enemySpawnRate) {
-		settings.enemySpawnRateCpt++;
-	} else {
-		enemies.push(makeEnemy());
-		settings.enemySpawnRateCpt = 0;
-	}
+function adjustFromInputs() {
+	adjustPlayerPosition();
+	adjustPlayerActions();
 }
 
 function adjustAnimations() {
-	moveMissiles();
 	manageEnemies();
+	moveMissiles();
 	moveEnemies();
+	moveThreshold();
 }
 
-function moveEnemies() {
-	let indexesToRemove = [];
-	for (let i = 0; i < enemies.length; i++) {
-		let oneEnemy = enemies[i];
-		oneEnemy.y += oneEnemy.speed;
-		if(oneEnemy.y > CANVAS_HEIGHT + (oneEnemy.r * 2)) {
-			indexesToRemove.push(i);
-			continue;
-		}
-	}
-
-	for (let i = 0; i < indexesToRemove.length; i++) {
-		enemies.splice(indexesToRemove[i], 1);
-	}
-}
 
 function adjustPlayerPosition() {
 	if(leftDown) {
@@ -384,10 +518,16 @@ function adjustPlayerPosition() {
 			thePlayer.y = (canvasMaxY - thePlayer.h - bordersPadding) ;
 		}
 	}
+	if(thePlayer.y < (thresholdSettings.coords.y + 4)){
+		thePlayer.y = thresholdSettings.coords.y + 4;
+	}
 }
 
+
+
+// TODO redécouper putain
 function adjustPlayerActions() {
-	if(isFire && thePlayer.fireCooldownCpt == 0) {
+	if(isFiring && thePlayer.fireCooldownCpt == 0) {
 		let missileType = missileTypes[thePlayer.currentMissileType];
 		let missileInfo = {
 			x: thePlayer.x + (thePlayer.w / 2) - (missileType.w / 2),
@@ -418,11 +558,11 @@ function adjustPlayerActions() {
 		thePlayer.fireCooldownCpt--;
 	}
 	
-	if(isSpeed && thePlayer.dashEnergy >= 0) {
+	if(isDashing && thePlayer.dashEnergy >= 0) {
 		thePlayer.speed = thePlayer.originalSpeed * 1.5;
 		thePlayer.dashEnergy -= (thePlayer.dashRefreshRate * 3);
 	}
-	else if(!isSpeed && thePlayer.dashEnergy < thePlayer.dashEnergyMax){
+	else if(!isDashing && thePlayer.dashEnergy < thePlayer.dashEnergyMax){
 		thePlayer.speed = thePlayer.originalSpeed;
 		thePlayer.dashEnergy += thePlayer.dashRefreshRate;
 		if(thePlayer.dashEnergy > thePlayer.dashEnergyMax) {
@@ -433,85 +573,128 @@ function adjustPlayerActions() {
 
 }
 
-function adjustFromInputs() {
-	adjustPlayerPosition();
-	adjustPlayerActions();
-}
-var missiles = [
 
-];
-var missileTypes = {
-	physical: {
-		name: 'physical',
-		color: 'white',
-		w: 4,
-		h: 8
-	},
-	mystical: {
-		name: 'mystical',
-		color: 'deeppink',
-		w: 4,
-		h: 8
-	},
-}
-var armorTypes = {
-	physical: {
-		name: 'physical',
-		color: 'grey',
-		w: 4,
-		h: 8
-	},
-	mystical: {
-		name: 'mystical',
-		color: 'purple',
-		w: 4,
-		h: 8
-	},
-}
-function drawMissile(data) {
-	// data.isFromPlayer
-	drawRectangle(data.coords.x, data.coords.y, data.type.w, data.type.h, data.type.color);
-}
-function drawMissiles() {
-	for (let i = 0; i < missiles.length; i++) {
-		let oneMissile = missiles[i];
-		drawMissile(oneMissile);
+
+
+/*
+███╗   ███╗ ██████╗ ██╗   ██╗███████╗███╗   ███╗███████╗███╗   ██╗████████╗███████╗
+████╗ ████║██╔═══██╗██║   ██║██╔════╝████╗ ████║██╔════╝████╗  ██║╚══██╔══╝██╔════╝
+██╔████╔██║██║   ██║██║   ██║█████╗  ██╔████╔██║█████╗  ██╔██╗ ██║   ██║   ███████╗
+██║╚██╔╝██║██║   ██║╚██╗ ██╔╝██╔══╝  ██║╚██╔╝██║██╔══╝  ██║╚██╗██║   ██║   ╚════██║
+██║ ╚═╝ ██║╚██████╔╝ ╚████╔╝ ███████╗██║ ╚═╝ ██║███████╗██║ ╚████║   ██║   ███████║
+╚═╝     ╚═╝ ╚═════╝   ╚═══╝  ╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝
+*/
+
+function moveEnemies() {
+	let indexesToRemove = [];
+	for (let i = 0; i < enemies.length; i++) {
+		let oneEnemy = enemies[i];
+		oneEnemy.y += oneEnemy.speed;
+		if(mostAdvancedEnemyY < oneEnemy.y) mostAdvancedEnemyY = oneEnemy.y;
+		if(oneEnemy.y > CANVAS_HEIGHT + (oneEnemy.r * 2)) {
+			indexesToRemove.push(i);
+			continue;
+		}
+	}
+
+	for (let i = 0; i < indexesToRemove.length; i++) {
+		enemies.splice(indexesToRemove[i], 1);
+	}
+
+	if(enemies.length < 5 && !beastMode) {
+		triggerBeastmodeForXSeconds(1);
 	}
 }
 
-function drawPlayer() {
-	let armorType = armorTypes[thePlayer.currentArmorType];
-	drawRectangle(thePlayer.x, thePlayer.y, thePlayer.w, thePlayer.h, armorType.color);
-}
-function drawAll() {
-	ctx.globalAlpha = 1;
-	drawPlayer();
-	ctx.globalAlpha = 1;
-	drawEnemies();
-	drawMissiles();
-	detectMissilesCollisions();
-	
+
+
+function moveThreshold() {
+	let enemyCoord = getMostAdvancedEnemyPosition();
+	if(enemyCoord.y >= thresholdSettings.coords.y) {
+		thresholdSettings.coords.y = mostAdvancedEnemyY;
+		return;
+	}
+	if(thePlayer.y - 10 <= thresholdSettings.coords.y) {
+		thresholdSettings.coords.y -= 1;
+		mostAdvancedEnemyY = thresholdSettings.coords.y;
+	}
+
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+ ██████╗ ██████╗ ██████╗ ███████╗    ███╗   ███╗███████╗████████╗██╗  ██╗ ██████╗ ██████╗ ███████╗
+██╔════╝██╔═══██╗██╔══██╗██╔════╝    ████╗ ████║██╔════╝╚══██╔══╝██║  ██║██╔═══██╗██╔══██╗██╔════╝
+██║     ██║   ██║██████╔╝█████╗      ██╔████╔██║█████╗     ██║   ███████║██║   ██║██║  ██║███████╗
+██║     ██║   ██║██╔══██╗██╔══╝      ██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██║   ██║██║  ██║╚════██║
+╚██████╗╚██████╔╝██║  ██║███████╗    ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║╚██████╔╝██████╔╝███████║
+ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝    ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝
+*/
 
 // (re)starts main loop
 function pleaseStart() {
-  init();
+	init();
+  }
+  
+  // stops main loop
+  function pleaseStop() {
+	clearInterval(mainLoop);
+  }
+  
+
+function mainLoop() {
+	//setTimeout(function() {
+		requestAnimationFrame(mainLoop);
+		
+		// prepare variables from inputs
+		adjustFromInputs();
+
+		// prepare anything that will move
+		adjustAnimations();
+
+		// cover everything
+		pleaseClear();
+
+		// draw everything
+		drawAll();
+
+	//}, 1000 / FRAMERATE);
+	frameCount++;
+	if(frameCount % FRAMERATE == 0) {
+		mainTimerInSeconds++;
+		console.log('mainTimerInSeconds : ', mainTimerInSeconds);
+	}
 }
-
-// stops main loop
-function pleaseStop() {
-  clearInterval(mainLoop);
+function getMostAdvancedEnemyPosition() {
+	let most = {x: 0, y: 0};
+	for (let i = 0; i < enemies.length; i++) {
+		let oneEnemy = enemies[i];
+		most.y = most.y < oneEnemy.y ? oneEnemy.y : most.y;
+	}
+	return most;
 }
-
-
-// pleaseStart();
-document.getElementById('doStart').addEventListener('click', function() {
-	document.getElementById('beginning').remove();
+function triggerBeastmodeForXSeconds(secs) {
+	beastMode = true;
 	setTimeout(function() {
-		pleaseStart();
-	}, 500);
-});
+		beastMode = false;
+	}, 1000*secs);
+}
+
+
 
 
 
