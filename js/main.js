@@ -5,8 +5,13 @@ https://patorjk.com/software/taag/#p=display&f=Doom
 http://keycode.info/
 
 BACKLOG:
-- 
-- 
+- score : fired / hit / wrong color / miss 
+- collisions with player (and invincibility period)
+- player health and dash energy
+- infinite background effect
+- enemies trajectories
+	- bouncing off sides
+
 
 TODO:
 - 
